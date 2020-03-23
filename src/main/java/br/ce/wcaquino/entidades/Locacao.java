@@ -5,13 +5,13 @@ import java.util.List;
 
 public class Locacao {
 
-	private Usuario usuario;
+	private static Usuario usuario;
 	private List<Filme> filmes;
 	private Date dataLocacao;
 	private Date dataRetorno;
 	private Double valor;
 	
-	public Usuario getUsuario() {
+	public static Usuario getUsuario() {
 		return usuario;
 	}
 	public void setUsuario(Usuario usuario) {

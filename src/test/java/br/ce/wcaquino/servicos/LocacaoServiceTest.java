@@ -1,6 +1,7 @@
 package br.ce.wcaquino.servicos;
 
 import static br.ce.wcaquino.builders.FilmeBuilder.umFilme;
+import static br.ce.wcaquino.builders.LocacaoBuilder.umLocacao;
 import static br.ce.wcaquino.builders.UsuarioBuilder.umUsuario;
 import static br.ce.wcaquino.matchers.MatchersProprios.caiEm;
 import static br.ce.wcaquino.matchers.MatchersProprios.caiNumaSegunda;
@@ -9,9 +10,10 @@ import static br.ce.wcaquino.matchers.MatchersProprios.ehHoje;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.security.Provider.Service;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
@@ -24,9 +26,14 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ErrorCollector;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import br.ce.wcaquino.builders.FilmeBuilder;
+import br.ce.wcaquino.builders.LocacaoBuilder;
 import br.ce.wcaquino.builders.UsuarioBuilder;
 import br.ce.wcaquino.daos.LocacaoDAO;
 import br.ce.wcaquino.entidades.Filme;
@@ -39,11 +46,17 @@ import buildermaster.BuilderMaster;
 
 public class LocacaoServiceTest {
 
+	@InjectMocks
 	private LocacaoService service;
 	
+	@Mock
 	private LocacaoDAO dao;
 	
+	@Mock
 	private SPCService spc;
+	
+	@Mock
+	private EmailService emailService;
 
 	@Rule
 	public ErrorCollector error = new ErrorCollector();
@@ -53,13 +66,7 @@ public class LocacaoServiceTest {
 
 	@Before
 	public void setup() {
-		service = new LocacaoService();
-		 dao = Mockito.mock(LocacaoDAO.class);
-		service.setLocacaoDAO(dao);
-		 spc = Mockito.mock(SPCService.class);
-		service.setSPCService(spc);
-		SPCService spc = Mockito.mock(SPCService.class);
-		service.setSPCService(spc);
+		MockitoAnnotations.initMocks(this);
 	}
 
 	@Test
@@ -174,21 +181,69 @@ public class LocacaoServiceTest {
 		assertThat(retorno.getDataRetorno(), caiNumaSegunda());
 	}
 	@Test
-	public void naoDeveAlugarFilmeParaNegativadoSPC() throws FilmeSemEstoqueException, LocadoraException {
+	public void naoDeveAlugarFilmeParaNegativadoSPC() throws Exception{
 		Usuario usuario = umUsuario().agora();
-		Usuario usuario2 = umUsuario().comNome("Usuario 2").agora();
 		List<Filme> filmes = Arrays.asList(umFilme().agora());
 		
-		when(spc.possuiNegativacao(usuario)).thenReturn(true);
+		when(spc.possuiNegativacao(Mockito.any(Usuario.class))).thenReturn(true);
+			
+		try {
+			service.alugarFilme(usuario, filmes);
+			Assert.fail();
+		}  catch (LocadoraException e) {
+			Assert.assertThat(e.getMessage(), is("Usuário Negativado!"));
+		}
 		
-		exception.expect(LocadoraException.class);
-		exception.expectMessage("Usuário Negativado!");
-		
-		service.alugarFilme(usuario2, filmes);
+		verify(spc).possuiNegativacao(usuario);
 		
 	}
 	public static void main(String[] args) {
 		new BuilderMaster().gerarCodigoClasse(Locacao.class);
 	}
+	@Test
+	public void deveEnviarEmailParaLocacoesAtrasadas() {
+	Usuario usuario = umUsuario().agora();
+	Usuario usuario2 = umUsuario().comNome("Usuario em dia!").agora();
+	Usuario usuario3 = umUsuario().comNome("Outro atrasado").agora();
+	List<Locacao> locacoes = Arrays.asList(
+			LocacaoBuilder.umLocacao().atrasados().comUsuario(usuario).agora()
+			,umLocacao().comUsuario(usuario2).agora(),
+			umLocacao().atrasados().comUsuario(usuario3).agora());
 	
+	when(dao.obterLocacoesPendentes()).thenReturn(locacoes);
+	
+	service.notificarAtrasos();
+	
+	verify(emailService, times(3)).notificarAtraso(Mockito.any(Usuario.class));;
+	verify(emailService).notificarAtraso(usuario);
+	verify(emailService, Mockito.atLeastOnce()).notificarAtraso(usuario3);
+	verify(emailService, Mockito.never()).notificarAtraso(usuario2);
+	Mockito.verifyNoMoreInteractions(emailService);
+	}
+
+	@Test
+	public void deveTratarErrosSPC()  throws Exception {
+		Usuario usuario = umUsuario().agora();
+		List<Filme> filmes = Arrays.asList(umFilme().agora());
+		
+		when(spc.possuiNegativacao(usuario)).thenThrow(new Exception("Falha catratrofica"));
+		
+		exception.expect(LocadoraException.class);
+		exception.expectMessage("Problemas com o SPC, tente novamente");
+		
+		service.alugarFilme(usuario, filmes);
+	}
+	@Test
+	public void deveProrrogarUmaLocacao() {
+		Locacao locacao = umLocacao().agora();
+		
+		service.prorrogarLocacao(locacao, 3);
+		ArgumentCaptor<Locacao> argCapt = ArgumentCaptor.forClass(Locacao.class);
+		Mockito.verify(dao).salvar(argCapt.capture());
+		Locacao locacaoRetornada = argCapt.getValue();
+		
+		assertThat(locacaoRetornada.getValor(),is(4.0));
+		Assert.assertThat(locacaoRetornada.getDataLocacao(),ehHoje());
+		Assert.assertThat(locacaoRetornada.getDataRetorno().ehHojeComDiferencaDias(3));
+	}
 }
