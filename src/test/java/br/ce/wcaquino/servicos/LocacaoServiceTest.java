@@ -19,6 +19,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Before;
@@ -26,6 +27,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ErrorCollector;
 import org.junit.rules.ExpectedException;
+import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -41,9 +43,11 @@ import br.ce.wcaquino.entidades.Locacao;
 import br.ce.wcaquino.entidades.Usuario;
 import br.ce.wcaquino.exceptions.FilmeSemEstoqueException;
 import br.ce.wcaquino.exceptions.LocadoraException;
+import br.ce.wcaquino.runners.ParallelRunner;
 import br.ce.wcaquino.utils.DataUtils;
 import buildermaster.BuilderMaster;
 
+@RunWith(ParallelRunner.class)
 public class LocacaoServiceTest {
 
 	@InjectMocks
@@ -67,6 +71,12 @@ public class LocacaoServiceTest {
 	@Before
 	public void setup() {
 		MockitoAnnotations.initMocks(this);
+		System.out.println("Iniciando 2...");
+	}
+	
+	@After
+	public void tearDown() {
+		System.out.println("Finalizando 2...");
 	}
 
 	@Test
@@ -242,8 +252,8 @@ public class LocacaoServiceTest {
 		Mockito.verify(dao).salvar(argCapt.capture());
 		Locacao locacaoRetornada = argCapt.getValue();
 		
-		assertThat(locacaoRetornada.getValor(),is(4.0));
-		Assert.assertThat(locacaoRetornada.getDataLocacao(),ehHoje());
-		Assert.assertThat(locacaoRetornada.getDataRetorno().ehHojeComDiferencaDias(3));
+		error.checkThat(locacaoRetornada.getValor(),is(12.0));
+		error.checkThat(locacaoRetornada.getDataLocacao(),ehHoje());
+		error.checkThat(locacaoRetornada.getDataRetorno(), eHojeComDiferencaDias(3));
 	}
 }
