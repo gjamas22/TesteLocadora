@@ -12,7 +12,9 @@
  	<artifactId>maven-surefire-plugin</artifactId>
  	<version>2.18.1</version>
  		<configuration>
- 		<threadCount>2</threadCount>
+ 			<includes>br/ce/wcaquino/**/*.java</includes>
+ 		<!--threadCount>5</threadCount-->
+ 		<useUnlimitedThreads>true</useUnlimitedThreads>
  		<parallel>all</parallel>
  		</configuration>
  	</plugin>
